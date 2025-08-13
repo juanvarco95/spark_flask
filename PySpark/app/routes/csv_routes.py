@@ -6,9 +6,9 @@ from flask import (Blueprint,
                 render_template_string, 
                 redirect,
                 url_for)
-from ..services.csv_service import (save_uploaded_file,
-                                    read_csv_to_spark_df,
-                                    df_to_html)
+from ..services.csv_service import (LoadFileSparkCSV,
+                                    SaveUploadFile,
+                                    DfToHTML)
 
 csv_bp = Blueprint('csv', __name__)
 
@@ -34,11 +34,22 @@ def upload():
     filename = secure_filename(file.filename)
     upload_folder = current_app.config['UPLOAD_FOLDER']
     
-    saved_path = save_uploaded_file(file, upload_folder, filename)
+    # saved_path = save_uploaded_file(file, upload_folder, filename)
+    saved_path = SaveUploadFile(file_storage = file,
+                                upload_folder = upload_folder,
+                                filename = filename).work()
     
-    df = read_csv_to_spark_df(saved_path)
+    # df = read_csv_to_spark_df(saved_path)
     
-    html_table = df_to_html(df)
+    df = LoadFileSparkCSV(file_path = saved_path,
+                        header = True,
+                        inferschema = True,
+                        sep = ';').work()
+    
+    # html_table = df_to_html(df)
+    
+    html_table = DfToHTML(spark_df = df,
+                        max_rows = 1000).work()
     
     html = f"""
     <html>
@@ -60,3 +71,13 @@ def upload():
     
     return render_template_string(html)  
 
+@csv_bp.route('/tables')
+def show_tables():
+    upload_folder = current_app.config['UPLOAD_FOLDER']
+    files = [f for f in os.listdir(upload_folder) if f.endswith('.csv')]
+    table_html = "<h2>Uploaded CSV Files</h2><ul>"
+    for f in files:
+        table_html += f"<li>{f}</li>"
+    table_html += "</ul><p><a href='/'>Upload another</a></p>"
+    print(upload_folder)
+    return render_template_string(table_html)
